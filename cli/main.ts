@@ -33,6 +33,10 @@ type PackageJson = {
   dependencies?: Record<string, string>;
 };
 
+function wantsHelp(args: string[]): boolean {
+  return args.includes("--help") || args.includes("-h");
+}
+
 function usage(stream: NodeJS.WriteStream = process.stdout): void {
   stream.write(`Usage: cairn <command> [options]
 
@@ -382,20 +386,36 @@ function parsePortArgs(args: string[]): string {
 }
 
 function cmdDev(args: string[]): void {
+  if (wantsHelp(args)) {
+    usage();
+    return;
+  }
   runNext("dev", ["--port", parsePortArgs(args)]);
 }
 
 function cmdStart(args: string[]): void {
+  if (wantsHelp(args)) {
+    usage();
+    return;
+  }
   runNext("start", ["--port", parsePortArgs(args)]);
 }
 
 async function cmdMcp(args: string[]): Promise<void> {
+  if (wantsHelp(args)) {
+    usage();
+    return;
+  }
   if (args.length > 0) throw new Error("mcp does not accept options");
   const { startMcpServer } = await import("../src/mcp/server");
   await startMcpServer();
 }
 
 async function cmdRecall(args: string[]): Promise<void> {
+  if (wantsHelp(args)) {
+    usage();
+    return;
+  }
   if (args.length > 0) throw new Error("recall does not accept options");
   const { handleRequest } = await import("../src/lib/cairn/store");
   const response = await handleRequest({

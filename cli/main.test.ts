@@ -206,6 +206,20 @@ describe("CLI safety", () => {
     assert.match(result.stdout, /Usage: cairn/);
   });
 
+  it("prints help for mcp, recall, dev, and start instead of treating --help as an option", async () => {
+    const root = mkdtempSync(join(tmpdir(), "cairn-cli-subcommand-help-"));
+    roots.push(root);
+    for (const command of ["mcp", "recall", "dev", "start"] as const) {
+      for (const flag of ["--help", "-h"] as const) {
+        const result = await runCli(root, [command, flag]);
+        assert.equal(result.code, 0, result.stderr);
+        assert.match(result.stdout, /Usage: cairn/);
+        assert.doesNotMatch(result.stderr, /does not accept options|Only --port/);
+      }
+    }
+    assert.equal(existsSync(join(root, ".cairn")), false);
+  });
+
   it("rejects unknown init options before creating files", async () => {
     const root = mkdtempSync(join(tmpdir(), "cairn-cli-flags-"));
     roots.push(root);
