@@ -56,7 +56,17 @@ The write tools expose the complete input schema and take request fields directl
 
 Every write carries an `idempotencyKey`. Replay the same key and body after a crash and Cairn returns the original result without writing twice.
 
-Recall returns `freshness` and `assurance` on each belief. Branch on `response.kind`. Rejections include `error.remedy.kind`.
+Recall returns `freshness` and `assurance` on each belief. Freshness is **age-advisory**: `ttl` is a clock, not a probe. The store never runs commands. When a belief is stale, re-observe outside Cairn, then assert with `onConflict: "supersede"`. Branch on `response.kind`. Rejections include `error.remedy.kind`.
+
+Validity kinds:
+
+| `validity.kind` | Meaning |
+| --- | --- |
+| `until-superseded` | Live until a later assert supersedes it |
+| `ttl` | Advisory stale after `staleAfterSeconds` from `assertedAt` |
+| `expires` | `expired` once `at` is reached |
+
+Inbound `validity.kind: "reverify"` is accepted for one minor and stored as `ttl`. The `command` field is dropped and is never executed. Do not send `reverify` on new asserts.
 
 ### Example assert
 
@@ -137,6 +147,48 @@ Pi also reads `.mcp.json`. Init writes the same portable file used for Claude Co
 
 Start Pi from the project root (or any client that loads `.mcp.json`) and open `/mcp` to confirm the `cairn` server is listed.
 
+## Cursor Agent Plugin
+
+This repository is an [Agent Plugin](https://agent-plugins.org/) (`plugin.json` + `mcp.json` + `skills/`) with a Cursor overlay at `.cursor-plugin/plugin.json` only so marketplace **Configure** can collect optional `CAIRN_HOME`. It does not add rules, hooks, agents, or commands.
+
+The npm package is always **`@quarkos/cairn`**. Never install or invoke the unscoped `cairn` package (an unrelated 2017 React Native styling library).
+
+### Usage
+
+1. In the project that should hold beliefs, run:
+
+   ```bash
+   npx -y @quarkos/cairn init --project
+   ```
+
+   That creates `.cairn/` (the SQLite store) on **your** machine.
+
+2. Install this plugin in Cursor (Customize, or a local copy under `~/.cursor/plugins/local`). Reload the window so the `cairn` MCP server and the `cairn-recall` / `cairn-assert` skills appear.
+
+3. Optionally open **Plugins → Configure** and set `CAIRN_HOME` to the **absolute** path of that project's `.cairn` directory (for example `/Users/you/work/checkout/.cairn`). Leave it unset if you already exported `CAIRN_HOME`, or if you want native resolution.
+
+4. Call `cairn_recall` at session start. Call `cairn_assert` after a decision, deploy, URL, or command actually lands. Call `cairn_retract` when a live fact is no longer true. Do not invent facts.
+
+### Config
+
+| Item | Value |
+| --- | --- |
+| MCP command | `npx -y @quarkos/cairn mcp` |
+| Store | `CAIRN_HOME` on the **installer's** machine |
+| Optional plugin variable | `CAIRN_HOME` — absolute path to the project's `.cairn` after `init --project`. Not required. Not a secret. |
+| Native resolution if unset | `CAIRN_HOME` if set, else `./.cairn` if that directory exists in the MCP process cwd, else `~/.cairn` |
+| Skills | `cairn-recall`, `cairn-assert` |
+
+`mcp.json` does not set `cwd` (and does not use `${PLUGIN_ROOT}`). Spec-compliant Agent Plugins clients still default the subprocess cwd to the plugin root, so do not rely on `./.cairn` inside the plugin install directory. Point `CAIRN_HOME` at **your** project store.
+
+If Configure leaves `CAIRN_HOME` blank, hosts may pass an empty string or the literal `${CAIRN_HOME}`. Cairn treats both as unset and continues native resolution. Never pin a coordinator or cloud-agent path such as `/home/box/cairn-loop/.cairn`.
+
+### Limit
+
+This plugin helps **Cursor IDE users on the installer's machine**. It does not inject facts into Cursor cloud agent VMs. Those remotes cannot see the installer's SQLite.
+
+Marketplace listing is a separate step. This repo is plugin source only; submitting at cursor.com/marketplace/publish is out of scope until someone does that on purpose.
+
 ## Desk and canvas
 
 Open **Desk** (`/`) for the beliefs table and Agent API console. Open **Canvas** (`/canvas`) to see each agent or session as a draggable container with the facts they contributed.
@@ -149,7 +201,7 @@ Agents group by `provenance.by` for told facts and by `provenance.session` for o
 npm publish --access public
 ```
 
-The published tarball ships the desk, canvas, API, CLI, and MCP server. Package and MCP server versions are both `0.4.5`.
+The published tarball ships the desk, canvas, API, CLI, and MCP server. Package and MCP server versions are both `0.5.0`. `Validity` no longer includes `reverify`; that is a public type break from 0.4.x.
 
 ## Where the database lives
 
